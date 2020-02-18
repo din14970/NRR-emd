@@ -1,0 +1,235 @@
+"""
+From the root folder 191205NonRigid run
+```
+python3 ./scripts/extract_images.py "<absolute path to EMD file>"
+```
+Optional arguments are:
+```
+-o, --output [path to where all output should be stored. Defaults to current working directory.]
+-n, --filename [name prefix the output files should have. Defaults to the name of the EMD file.]
+-d, --detector [the index that corresponds to the dataset that contains the image frames [0-?]. The script will try to find this automatically but it may fail if multiple datasets are included with multiple frames in the same EMD file. You can visualise the emd structure with the get_emd_tree_view in TEMMETA/basictools/data_io.py or with a tool like HDFView. Script fails if the index is out of range.]
+-s, --spectrumdetector [same as -d except for the SpectrumStream data. Defaults to 0, assuming only one dataset per emd file. Script fails if the index is out of range.]
+-p, --padding [the frames will be exported with the filename_%0x.tiff pattern. p determines the number of counter digits. By default the minimum number of digits is calculated based on the number of frames. If p is less than the minimum number of digits required the script will fail.]
+```
+"""
+
+import argparse
+import logging
+import sys
+import os
+import numpy as np
+
+logging.basicConfig(level=logging.DEBUG)
+
+def main():
+    from TEMMETA.basictools import data_io as bo
+
+    extension = "png"
+    #set up the argparser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input",
+                        help = "path to EMD file")
+    parser.add_argument("-o", "--output",
+                        help = "path to where output should be stored",
+                        default = ".")
+    parser.add_argument("-n", "--filename", type = str,
+                        help = "name given to the output image frames",
+                        default = None)
+    parser.add_argument("-d", "--detector", type=int,
+                        help = "the index of the dataset containing the image frames.\
+                                only try if the right dataset is not found automatically.",
+                        default = None)
+    parser.add_argument("-s", "--spectrumdetector", type=int,
+                        help = "the index of the dataset containing the spectrum frames.\
+                                only try if the right dataset is not found automatically.",
+                        default = None)
+    parser.add_argument("-p", "--padding", type=int,
+                        help = "number of digits in the frame counter. If not used \
+                                will default to just the necessary amount.",
+                        default = None)
+    parser.add_argument("-m", "--minimum", type=int,
+                        help = "Minimum intensity to use for linear scaling",
+                        default = None)
+    parser.add_argument("-M", "--maximum", type=int,
+                        help = "Maximum intensity to use for linear scaling",
+                        default = None)
+    args = parser.parse_args() #read the arguments, store in args
+
+    #get input path and extension
+    inpath = args.input
+    _, ext = os.path.splitext(inpath)
+    if not os.path.isfile(inpath) and ext=="emd":
+        logging.error("{} is not a valid emd file path".format(inpath))
+        return
+
+    #get the output path
+    oupath = args.output
+    if not os.path.isdir(oupath):
+        logging.error("{} is not a valid directory".format(oupath))
+        logging.error("Will attempt to create this directory")
+        os.makedirs(oupath)
+
+    #No filename provided? Take the name of the emd file
+    if args.filename is None:
+        fullname = inpath.split("/")[-1]
+        expname, _ = os.path.splitext(fullname)
+    else:
+        expname = args.filename
+
+    #read in the file
+    try:
+        f = bo.read_emd(inpath)
+        logging.debug("Opened file {}".format(inpath))
+    except:
+        logging.error("Did not manage to open file {}".format(inpath))
+        return
+
+    #write out the simplified metadata to a json file
+    try:
+        logging.debug("Writing out the metadata...")
+        bo.create_simple_metadata_emd(f, save_file = f"{oupath}/metadata.json")
+    except:
+        logging.error("Error reading or writing the metadata")
+
+    #setting some variables that may be useful at later stages
+    det_no = 0
+    det_uuid = 0
+    num_frames = 0
+    #if no specific dataset is mentioned, try and find it
+    if args.detector is None:
+        oup = bo.guess_multiframe_dataset(f)
+        if oup: #something was found
+            det_no, det_uuid, num_frames = oup
+        else:
+            return
+    else:
+        try:
+            det_no = args.detector
+            det_uuid = bo.get_det_uuid(f, "Image", det_no)
+            num_frames = f["Data"]["Image"][det_uuid]["Data"].shape[-1]
+        except:
+            logging.error("{} is an invalid dataset number".format(args.detector))
+            return
+
+    imsize = f["Data"]["Image"][det_uuid]["Data"].shape[0]
+    outlevel = int(np.log2(imsize))
+    logging.debug("The images are {}x{}. There are {} frames.".format(imsize, imsize, num_frames))
+    logging.debug("The images dataset UUID is {} and detector index is {}".format(det_uuid, det_no))
+    #output path for images
+    path = oupath+"/images/"
+
+    #save the images in the oupath/images folder
+    # bo.save_all_image_frames(f, det_no, expname, path,
+    #                scale_bar=False, show_fig = False, save_meta = False,
+    #                imshow_kwargs= {"cmap" : "Greys_r"}, counter = args.padding)
+    bo.export_all_image_frames(f, det_no, expname, path, counter = args.padding,
+                            type = "uint8", min = args.minimum, max = args.maximum)
+    logging.debug("Wrote the image frames out to files in {path}")
+
+    #which dataset to export
+    if not args.spectrumdetector:
+        det_no_spec = 0
+    else:
+        det_no_spec = args.spectrumdetector
+    #output path for spectra
+    path = oupath+"/spectra/"
+    logging.debug("Trying to write out the spectral frames to {}".format(path))
+    try:
+        bo.save_all_spectrum_frames(f, det_no_spec, expname, path, counter = args.padding)
+        logging.debug("Wrote the spectral frames out to files in {}".format(path))
+    except:
+        logging.error("""Failed to write out spectral frames. Likely the emd file
+                        does not contain a spectrum stream""")
+
+    #we have to calculate the counter anyway now... At this point an error should
+    #already have been raised if the counter is too small
+    if args.padding:
+        counter = args.padding
+    else:
+        counter = bo.get_counter(num_frames)
+
+    #construct the config file
+    filename = oupath+"matchSeries_{}.par".format(expname)
+    pathpattern = oupath+"images/{}_%0{}d.{}".format(expname, counter, extension)
+    abspath = oupath
+    #already create the folder for the output
+    outputpath = "{}nonrigid_results/".format(abspath)
+    if not os.path.isdir(outputpath):
+        os.makedirs(outputpath)
+    write_config_file(filename, pathpattern, abspath, outlevel, num_frames)
+
+def write_config_file(filename, pathpattern = " ", abspath = " ", preclevel = 8, num_frames = 1):
+    cnfgtmpl = ("templateNamePattern {}\n"
+            "templateNumOffset 0\n"
+            "templateNumStep 1\n"
+            "numTemplates {}\n"
+            "#templateSkipNums {{ }}\n"
+            "\n"
+            "cropInput 0\n"
+            "cropStartX 0\n"
+            "cropStartY 0\n"
+            "dontResizeOrCropReference 0\n"
+            "\n"
+            "preSmoothSigma 0\n"
+            "\n"
+            "saveRefAndTempl 0\n"
+            "\n"
+            "numExtraStages 2\n"
+            "\n"
+            "saveDirectory {}nonrigid_results/\n"
+            "\n"
+            "dontNormalizeInputImages 0\n"
+            "enhanceContrastSaturationPercentage 0.15\n"
+            "normalizeMinToZero 1\n"
+            "\n"
+            "# lambda weights the deformation regularization term\n"
+            "lambda         200\n"
+            "# lambdaFactor scales lambda dependening on the current level: On level d, lambda is multiplied by pow ( lambdaFactor, stopLevel - d )\n"
+            "lambdaFactor   1\n"
+            "\n"
+            "maxGDIterations 500\n"
+            "stopEpsilon 1e-6\n"
+            "\n"
+            "startLevel {}\n"
+            "stopLevel {}\n"
+            "precisionLevel {}\n"
+            "refineStartLevel {}\n"
+            "refineStopLevel {}\n"
+            "\n"
+            "checkboxWidth {}\n"
+            "\n"
+            "resizeInput 0\n"
+            "\n"
+            "dontAccumulateDeformation 0\n"
+            "reuseStage1Results 1\n"
+            "extraStagesLambdaFactor 0.1\n"
+            "useMedianAsNewTarget 1\n"
+            "calcInverseDeformation 0\n"
+            "skipStage1 0\n"
+            "\n"
+            "saveNamedDeformedTemplates 1\n"
+            "saveNamedDeformedTemplatesUsingNearestNeighborInterpolation 1\n"
+            "saveNamedDeformedTemplatesExtendedWithMean 1\n"
+            "saveDeformedTemplates 1\n"
+            "saveNamedDeformedDMXTemplatesAsDMX 1")
+    cnfg = cnfgtmpl.format(pathpattern, num_frames, abspath, preclevel-2,
+                            preclevel, preclevel, preclevel-1, preclevel, preclevel)
+    with open(filename, "w") as file:
+        file.write(cnfg)
+
+    logging.debug("Wrote the config file with an initial parameter guess")
+
+if __name__=="__main__":
+    from pathlib import Path
+
+    ownpath = os.path.abspath(__file__)
+    folder, file = os.path.split(ownpath)
+    folder = Path(folder)
+    sys.path.append(str(folder.parent))
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    main()
+    #filename = "/Users/nielscautaerts/Documents/Data/TESTDATA/20200206/test.par"
+    #write_config_file(filename)

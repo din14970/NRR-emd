@@ -1,0 +1,64 @@
+deformationModel 8
+reduceDeformations 0
+
+templateNamePattern ${QUOC_DATA_DIR}/emic/data/Liebscher/HAADF_1606/HAADF_1606_%03d.nc 
+
+templateNumOffset 0
+templateNumStep 1
+numTemplates 60
+templateSkipNums { 4 5 17 }
+
+#cropInput 1
+#cropStartX 0
+#cropStartY 100
+dontResizeOrCropReference 1
+
+preSmoothSigma 0
+	
+saveRefAndTempl 1
+
+numExtraStages 2
+
+#averageSaveIncrement 4
+
+saveDirectory ${QUOC_OUTPUT_DIR}/results-HAADF_1606-affine/
+
+dontNormalizeInputImages 0
+normalizeMinToZero 1
+
+# lambda weights the deformation regularization term
+lambda         20
+# lambdaFactor scales lambda dependening on the current level: On level d, lambda is multiplied by pow ( lambdaFactor, stopLevel - d )
+lambdaFactor   1
+ 
+MaxGradientDescentSteps 100
+UseComponentWiseTimestep 1
+maxGDIterations 200
+stopEpsilon 1e-5
+
+startLevel 7
+stopLevel 9
+precisionLevel 9
+refineStartLevel 8
+refineStopLevel 9
+
+checkboxWidth 8
+
+resizeInput 0
+
+useCorrelationToInitTranslation 1
+maxCorrShift 30
+
+resampleInsteadOfProlongateDeformation 1
+dontAccumulateDeformation 0
+reuseStage1Results 1
+extraStagesLambdaFactor 0.1
+useMedianAsNewTarget 1
+calcInverseDeformation 0
+skipStage1 0
+
+saveNamedDeformedTemplates 1
+saveNamedDeformedTemplatesUsingNearestNeighborInterpolation 1
+saveNamedDeformedTemplatesExtendedWithMean 1
+saveNamedDeformedDMXTemplatesAsDMX 1
+saveNamedDeformations 1

@@ -1,0 +1,3 @@
+[submodule "TEMMETA"]
+	path = TEMMETA
+	url = https://github.com/din14970/TEMMETA.git
