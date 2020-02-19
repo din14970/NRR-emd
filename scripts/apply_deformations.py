@@ -155,12 +155,15 @@ def getNameCounterFrames(path):
     with open(path) as f:
         text = f.read()
 
-    basename, counter, ext = re.findall(r"\/([^\/]+)_%0(.+)d\.([A-Za-z0-9]+)", text)[0]
+    basename, counter, ext = re.findall(r"[\/\\]([^\/\\]+)_%0(.+)d\.([A-Za-z0-9]+)", text)[0]
     counter = int(counter)
     numframes = int(re.findall(r"numTemplates ([0-9]+)", text)[0])
-    skipframes_line = re.findall(r"templateSkipNums (.*)", text)[0]
-    skipframes = re.findall(r"([0-9]+)[^0-9]", skipframes_line)
-    skipframes = list(map(int, skipframes))
+    try:
+        skipframes_line = re.findall(r"[^\# *]templateSkipNums (.*)", text)[0]
+        skipframes = re.findall(r"([0-9]+)[^0-9]", skipframes_line)
+        skipframes = list(map(int, skipframes))
+    except: #when commented out, will give error
+        skipframes = []
     bznumber = re.findall(r"stopLevel +([0-9]+)", text)[0].zfill(2)
     stages = int(re.findall(r"numExtraStages +([0-9]+)", text)[0])+1
 
@@ -172,7 +175,7 @@ def write_as_png(img, path):
     defimg.save(path)
 
 
-def apply_deformations(folder: str):
+def apply_deformations(folder: str, filenumbers = None):
 
     #reading the config file for the parameters that were used in the NRR
     try:
@@ -220,7 +223,15 @@ def apply_deformations(folder: str):
         numChannels = meta["EDX"]["Channels"]
 
     firstframe = True
-    for i in range(frames):
+    
+    #loop over all or not?
+    if filenumbers:
+        toloop = filenumbers
+        firstframe = False
+    else:
+        toloop = range(frames)
+    
+    for i in toloop:
         if not i in skipframes:
             logging.info("Processing frame {}".format(i))
             #image = readArrayFromNetCDF("{}{}{:02d}.nc".format(dataFolder, dataBaseName, i))
@@ -280,8 +291,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("folder",
                         help = "root folder containing the metadata, config, images and spectra")
+    parser.add_argument("-f", "--filenumbers",  nargs='+', type=int,
+                        help = "numbers of the images you want to apply deformations to. If not provided defaults to all.", default = None)
     args = parser.parse_args()
-    apply_deformations(args.folder)
+    apply_deformations(args.folder, args.filenumbers)
 
 
 if __name__ == '__main__':
