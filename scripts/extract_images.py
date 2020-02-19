@@ -1,5 +1,5 @@
 """
-From the root folder 191205NonRigid run
+From the root folder NRR run
 ```
 python3 ./scripts/extract_images.py "<absolute path to EMD file>"
 ```
@@ -10,6 +10,7 @@ Optional arguments are:
 -d, --detector [the index that corresponds to the dataset that contains the image frames [0-?]. The script will try to find this automatically but it may fail if multiple datasets are included with multiple frames in the same EMD file. You can visualise the emd structure with the get_emd_tree_view in TEMMETA/basictools/data_io.py or with a tool like HDFView. Script fails if the index is out of range.]
 -s, --spectrumdetector [same as -d except for the SpectrumStream data. Defaults to 0, assuming only one dataset per emd file. Script fails if the index is out of range.]
 -p, --padding [the frames will be exported with the filename_%0x.tiff pattern. p determines the number of counter digits. By default the minimum number of digits is calculated based on the number of frames. If p is less than the minimum number of digits required the script will fail.]
+-m, -M minimum and maximum intensity to use for rescaling to 8 bit
 ```
 """
 
@@ -18,6 +19,8 @@ import logging
 import sys
 import os
 import numpy as np
+from pathlib import Path
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -116,7 +119,7 @@ def main():
     logging.debug("The images are {}x{}. There are {} frames.".format(imsize, imsize, num_frames))
     logging.debug("The images dataset UUID is {} and detector index is {}".format(det_uuid, det_no))
     #output path for images
-    path = oupath+"/images/"
+    path = str(Path(oupath+"/images/"))
 
     #save the images in the oupath/images folder
     # bo.save_all_image_frames(f, det_no, expname, path,
@@ -132,7 +135,7 @@ def main():
     else:
         det_no_spec = args.spectrumdetector
     #output path for spectra
-    path = oupath+"/spectra/"
+    path = str(Path(oupath+"/spectra/"))
     logging.debug("Trying to write out the spectral frames to {}".format(path))
     try:
         bo.save_all_spectrum_frames(f, det_no_spec, expname, path, counter = args.padding)
@@ -149,16 +152,17 @@ def main():
         counter = bo.get_counter(num_frames)
 
     #construct the config file
-    filename = oupath+"matchSeries_{}.par".format(expname)
-    pathpattern = oupath+"images/{}_%0{}d.{}".format(expname, counter, extension)
-    abspath = oupath
+    filename = str(Path(oupath+"/matchSeries_{}.par".format(expname)))
+    pathpattern = str(Path(oupath+"/images/{}_%0{}d.{}".format(expname, counter, extension)))
+    abspath = str(Path(oupath))
     #already create the folder for the output
-    outputpath = "{}nonrigid_results/".format(abspath)
+    outputpath = str(Path("{}/nonrigid_results/".format(abspath)))
     if not os.path.isdir(outputpath):
         os.makedirs(outputpath)
     write_config_file(filename, pathpattern, abspath, outlevel, num_frames)
 
 def write_config_file(filename, pathpattern = " ", abspath = " ", preclevel = 8, num_frames = 1):
+    savedir = str(Path(f"{abspath}/nonrigid_results/"))
     cnfgtmpl = ("templateNamePattern {}\n"
             "templateNumOffset 0\n"
             "templateNumStep 1\n"
@@ -176,7 +180,7 @@ def write_config_file(filename, pathpattern = " ", abspath = " ", preclevel = 8,
             "\n"
             "numExtraStages 2\n"
             "\n"
-            "saveDirectory {}nonrigid_results/\n"
+            "saveDirectory {}\n"
             "\n"
             "dontNormalizeInputImages 0\n"
             "enhanceContrastSaturationPercentage 0.15\n"
@@ -212,7 +216,7 @@ def write_config_file(filename, pathpattern = " ", abspath = " ", preclevel = 8,
             "saveNamedDeformedTemplatesExtendedWithMean 1\n"
             "saveDeformedTemplates 1\n"
             "saveNamedDeformedDMXTemplatesAsDMX 1")
-    cnfg = cnfgtmpl.format(pathpattern, num_frames, abspath, preclevel-2,
+    cnfg = cnfgtmpl.format(pathpattern, num_frames, savedir, preclevel-2,
                             preclevel, preclevel, preclevel-1, preclevel, preclevel)
     with open(filename, "w") as file:
         file.write(cnfg)
@@ -220,8 +224,6 @@ def write_config_file(filename, pathpattern = " ", abspath = " ", preclevel = 8,
     logging.debug("Wrote the config file with an initial parameter guess")
 
 if __name__=="__main__":
-    from pathlib import Path
-
     ownpath = os.path.abspath(__file__)
     folder, file = os.path.split(ownpath)
     folder = Path(folder)
