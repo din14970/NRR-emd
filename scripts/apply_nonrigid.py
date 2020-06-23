@@ -10,17 +10,15 @@ import logging
 import os
 import sys
 from time import time
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 
 def main():
-    from pathlib import Path
-
     ownpath = os.path.abspath(__file__)
     folder, file = os.path.split(ownpath)
     folder = Path(folder)
 
-    #sys.path.append(str(folder))
     sys.path.append(str(folder.parent))
     ptms = str(Path(str(folder.parent)+"/match-series/quocGCC/projects/electronMicroscopy/"))
     sys.path.append(ptms)
@@ -36,7 +34,7 @@ def main():
     logging.info("--------Non-rigid registration------------")
     logging.info("------------------------------------------")
     logging.info(f"Calling non-rigid registration on {ptc}")
-    cmd = [str(Path(ptms+"/matchSeries")), f"{ptc}"]
+    cmd = [str("matchSeries"), f"{ptc}"]
     process1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd = ptms)
     process1.wait()
     logging.info(f"Finished non-rigid registration")
