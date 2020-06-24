@@ -28,17 +28,15 @@ minimum number of digits required the script will fail.]
 
 import argparse
 import logging
-import sys
 import os
 import numpy as np
 from pathlib import Path
-
+from temmeta import data_io as bo
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def main():
-    from TEMMETA.basictools import data_io as bo
 
     extension = "png"
     # set up the argparser
@@ -253,11 +251,6 @@ def write_config_file(filename, pathpattern=" ", abspath=" ",
 
 
 if __name__ == "__main__":
-    ownpath = os.path.abspath(__file__)
-    folder, file = os.path.split(ownpath)
-    folder = Path(folder)
-    sys.path.append(str(folder.parent))
-
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 

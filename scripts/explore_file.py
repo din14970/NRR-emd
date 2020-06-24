@@ -1,16 +1,14 @@
-
+"""
+This script prints out the contents of a Velox EMD file
+"""
 import argparse
 import logging
 import sys
-import os
 from pathlib import Path
+import os
+from temmeta import data_io as dio
 
-
-logging.basicConfig(level=logging.DEBUG)
-
-
-def main():
-    from TEMMETA.basictools import data_io as bo
+def main(): 
     parser = argparse.ArgumentParser()
     parser.add_argument("input",
                         help="path to EMD file")
@@ -26,21 +24,18 @@ def main():
 
     # read in the file
     try:
-        f = bo.EMDFile(inpath)
+        f = dio.EMDFile(inpath)
         logging.debug("Opened file {}".format(inpath))
     except OSError:
         logging.error("Did not manage to open file {}".format(inpath))
         return
+    except Exception as e:
+        logging.error("Unknown error: {e}")
 
     f.print_simple_structure()
 
 
 if __name__ == "__main__":
-    ownpath = os.path.abspath(__file__)
-    folder, file = os.path.split(ownpath)
-    folder = Path(folder)
-    sys.path.append(str(folder.parent))
-
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
