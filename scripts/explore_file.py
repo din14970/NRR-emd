@@ -1,45 +1,41 @@
-
+"""
+This script prints out the contents of a Velox EMD file
+"""
 import argparse
 import logging
 import sys
-import os
-import numpy as np
 from pathlib import Path
+import os
+from temmeta import data_io as dio
 
-
-logging.basicConfig(level=logging.DEBUG)
-
-def main():
-    from TEMMETA.basictools import data_io as bo
+def main(): 
     parser = argparse.ArgumentParser()
     parser.add_argument("input",
-                        help = "path to EMD file")
-    args = parser.parse_args() #read the arguments, store in args
-    
-    #get input path and extension
+                        help="path to EMD file")
+    args = parser.parse_args()
+    # read the arguments, store in args
+
+    # get input path and extension
     inpath = args.input
     _, ext = os.path.splitext(inpath)
-    if not os.path.isfile(inpath) and ext=="emd":
+    if not os.path.isfile(inpath) and ext == "emd":
         logging.error("{} is not a valid emd file path".format(inpath))
         return
-    
-    #read in the file
+
+    # read in the file
     try:
-        f = bo.read_emd(inpath)
+        f = dio.EMDFile(inpath)
         logging.debug("Opened file {}".format(inpath))
-    except:
+    except OSError:
         logging.error("Did not manage to open file {}".format(inpath))
         return
-        
-    bo.print_simple_structure(f)
+    except Exception as e:
+        logging.error("Unknown error: {e}")
+
+    f.print_simple_structure()
 
 
-if __name__=="__main__":
-    ownpath = os.path.abspath(__file__)
-    folder, file = os.path.split(ownpath)
-    folder = Path(folder)
-    sys.path.append(str(folder.parent))
-
+if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 

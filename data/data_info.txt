@@ -1,0 +1,1 @@
+The included dataset was acquired on a Thermo-Fisher Titan probe-corrected instrument. The original datafile was called '1813 31.4 Mx SI EDS-HAADF-DF4-DF2-BF 20200211.emd'. It depicts a ZnO crystal along one of the major zones. The dataset includes multiple STEM detector images as well as an EDX spectrum stream.
