@@ -105,6 +105,7 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
     ---------------------
     See kwargs of processing.write_config method
     """
+    inp, ext = os.path.splitext(input_path)
     if not os.path.isfile(input_path) and ext == "emd":
         raise ValueError("{} is not a valid emd file path".format(input_path))
     input_path = os.path.abspath(input_path)
