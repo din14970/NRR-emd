@@ -1,117 +1,89 @@
 import logging
+import os
+import subprocess
+import imageio
 from pathlib import Path
+from .io_tools import read_config_file, loadFromQ2bz, _getNameCounterFrames
 
 
-def write_config_file(filename, pathpattern=" ", abspath=" ",
-                      preclevel=8, num_frames=1, numoffset=0,
-                      numstep=1, skipframes=[], presmooth=False,
-                      saverefandtempl=False, numstag=2, normalize=True,
-                      enhancefraction=0.15, mintozero=True, regularization=200,
-                      regfactor=1, gditer=500, epsilon=1e-6, startleveloffset=2,
-                      extralambda=0.1):
-    """
-    Wrapper function to create a standard config file
+def calculate_non_rigid_registration(config_file):
+    cmd = [str("matchSeries"), f"{config_file}", ">", "output.log"]
+    process1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    process1.wait()
+    logging.info("Finished non-rigid registration")
 
-    Parameters
-    ----------
-    filename : str
-        path to the config file
-    pathpattern : str, optional
-        string pattern for image files
-    abspath : str, optional
-        path to root folder where results will be stored
-    preclevel : int, optional
-        base2 power of the images
-    num_frames : int, optional
-        number of images to process
-    numoffset : int, optional
-        index of first image to process
-    numstep : int, optional
-        to skip frames at regular interval
-    skipframes : list, optional
-        to kick out certain frames
-    presmooth : bool, optional
-        to smooth images before usage
-    saverefandtempl : bool, optional
-        save both the reference and the template
-    numstage : int, optional
-        number of stages
-    normalize : bool, optional
-        normalize the images
-    enhancefraction : float, optional
-        brightness/contrast adjustment
-    mintozero : bool, optional
-        minimum intensity mapped to 0
-    regularization : int, optional
-        regularization factor used in optimization level 1
-    regfactor : float, optional
-        adjustment of reg parameter with different binnings
-    gditer : int, optional
-        max number of iterations
-    epsilon : float, optional
-        desired precision
-    startleveloffset : int, optional
-        offset of the start level
-    extralambda : int, optional
-        adjustment of regularization with subsequent steps
-    """
-    savedir = str(Path(f"{abspath}/nonrigid_results/"))
-    if normalize:
-        normalize=0
-    else:
-        normalize=1
-    cnfgtmpl = (f"templateNamePattern {pathpattern}\n"
-                f"templateNumOffset {numoffset}\n"
-                f"templateNumStep {numstep}\n"
-                f"numTemplates {num_frames}\n"
-                f"templateSkipNums {{ {skipframes} }}\n"
-                "\n"
-                f"preSmoothSigma {presmooth*1}\n"
-                "\n"
-                f"saveRefAndTempl {saverefandtempl*1}\n"
-                "\n"
-                f"numExtraStages {numstag}\n"
-                "\n"
-                f"saveDirectory {savedir}\n"
-                "\n"
-                f"dontNormalizeInputImages {normalize*1}\n"
-                f"enhanceContrastSaturationPercentage {enhancefraction}\n"
-                f"normalizeMinToZero {mintozero*1}\n"
-                "\n"
-                f"# lambda weights the deformation regularization term\n"
-                f"lambda {regularization}\n"
-                "# lambdaFactor scales lambda dependening on the current level"
-                ": On level d, lambda is multiplied by pow ( lambdaFactor, "
-                "stopLevel - d )\n"
-                f"lambdaFactor {lambdafactor}\n"
-                f"\n"
-                f"maxGDIterations {gditer}\n"
-                f"stopEpsilon {epsilon}\n"
-                f"\n"
-                f"startLevel {preclevel-startleveloffset}\n"
-                f"stopLevel {preclevel}\n"
-                f"precisionLevel {preclevel}\n"
-                f"refineStartLevel {preclevel-1}\n"
-                f"refineStopLevel {preclevel}\n"
-                f"\n"
-                f"checkboxWidth {preclevel}\n"
-                f"\n"
-                f"resizeInput 0\n"
-                f"\n"
-                f"dontAccumulateDeformation 0\n"
-                f"reuseStage1Results 1\n"
-                f"extraStagesLambdaFactor {extralambda}\n"
-                f"useMedianAsNewTarget 1\n"
-                f"calcInverseDeformation 0\n"
-                f"skipStage1 0\n"
-                f"\n"
-                f"saveNamedDeformedTemplates 1\n"
-                f"saveNamedDeformedTemplatesUsing"
-                f"NearestNeighborInterpolation 1\n"
-                f"saveNamedDeformedTemplatesExtendedWithMean 1\n"
-                f"saveDeformedTemplates 1\n"
-                f"saveNamedDeformedDMXTemplatesAsDMX 1")
-    with open(filename, "w") as file:
-        file.write(cnfg)
 
-    logging.debug("Wrote the config file with an initial parameter guess")
+def apply_deformations(result_folder, image_folder, spectra_folder=None):
+    # # get the path to the image files
+    # conf = read_config_file(config_file)
+    # if image_folder is None:
+    #     imfolder, _ = os.path.split(conf["templateNamePattern"])
+    # else:
+    #     imfolder = image_folder
+    # # get basic info about the images
+    # (dataBaseName, counter, imgext, frames, skipframes, bznumber,
+    #     stage) = _getNameCounterFrames(config_file)
+    # # get the matching number
+    # _, index = config_file.split("_")
+    # if spectra_folder is None:
+    #     # check whether there is a first spectrum folder
+    #     rootfolder, _ = os.path.split(imfolder)
+    #     spectra_folder = str(Path(rootfolder+"/spectra_000"))
+    #     if not os.path.isdir(spectra_folder):
+    #         spectra_folder = None
+
+    imfiles = os.listdir(image_folder)
+    for i in imfiles:
+        if os.path.splitext(i)[-1]=="json":
+            continue
+        logging.info("Processing frame {}".format(i))
+        image = imageio.imread(str(Path(image_folder+f"/{i}")))
+        #first frame is a bit of an exception
+        if firstframe:
+            defX = loadFromQ2bz("{}{}/deformation_{}_0.dat.bz2".format(defFolder, i, bznumber))
+            defY = loadFromQ2bz("{}{}/deformation_{}_1.dat.bz2".format(defFolder, i, bznumber))
+            firstframe = False
+        else:
+            defX = loadFromQ2bz("{}{}-r/deformation_{}_0.dat.bz2".format(defFolder, i, bznumber))
+            defY = loadFromQ2bz("{}{}-r/deformation_{}_1.dat.bz2".format(defFolder, i, bznumber))
+
+        coords = \
+            np.mgrid[0:h, 0:w] + np.multiply([defY, defX], (np.max([h, w])-1))
+        deformedImage = ndimage.map_coordinates(image, coords, order=0, mode='constant', cval=image.mean())
+        #order is the order of the spline interpolation
+        #mode constant means everything outside the range is assumed a constant value
+        #cval is the constant value, we take it as the mean
+        write_as_png(deformedImage, f"{defImagesFolder}{dataBaseName}_{c}.{imgext}")
+        logging.info(f"Wrote out the deformed image to {imgext}")
+        #saveArrayAsNetCDF(deformedImage, "{}{:02d}.nc".format(dataBaseName, i))
+
+        if there_is_edx:
+            logging.info("Reading spectra ... ")
+            #spectra = hs.load("{}{}.hspy".format(dataFolder, i))
+            spectra = load_npz(f"{specfolder}{dataBaseName}_{c}.npz")
+            logging.info("done")
+            #for the 3D coordinates, the channel remains unchanged, we add a third axis with channels
+
+            #print(numChannels, type(numChannels))
+            # d3dcoords = \
+            #     np.mgrid[0:numChannels, 0:h, 0:w]\
+            #     + np.multiply([np.tile(np.zeros([h, w]), (numChannels, 1, 1)),\
+            #                     np.tile(defY, (numChannels, 1, 1)),\
+            #                     np.tile(defX, (numChannels, 1, 1))], (np.max([h, w])-1))
+            spectradef = spectra.T.toarray().reshape(numChannels, h, w) #unravel, make full 3D array
+            #we have to loop, 3D coordinate transformation doesn't fit in memory
+            logging.info("Applying the deformations")
+            image_stack = hs.signals.Signal2D(spectradef)
+            image_stack.axes_manager[1].name = "x"
+            image_stack.axes_manager[2].name = "y"
+            result = image_stack.map(lambda x: ndimage.map_coordinates(x, coords, order=0, mode = "constant"),
+                        inplace = False, parallel = True)
+            # for j in tqdm(range(numChannels)):
+            #     slice = spectradef[j, :, :]
+            #     defslice = ndimage.map_coordinates(slice, coords, order=0, mode='constant')
+            #     spectradef[j, :, :] = defslice
+            result.unfold()
+            defspec_sp = csr_matrix(result.data.T) #sparse matrix rep
+            save_npz(f"{defSpectraFolder}{dataBaseName}_{c}.npz", defspec_sp)
+            logging.info("Wrote out the deformed spectrum")
+            #saveArrayAsNetCDF(spectra.data, "EDX_{:02d}.nc".format(i), optimizeDataType=True) 

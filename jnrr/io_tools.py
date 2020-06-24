@@ -8,6 +8,9 @@ import concurrent.futures as cf
 import logging
 from pathlib import Path
 import os
+import numpy as np
+import re
+import bz2
 
 
 def export_frame(frame, path):
@@ -62,7 +65,8 @@ def export_frames(stack, output_folder=None, prefix="frame",
 
 def extract_emd(input_path, output_folder=None, prefix="frame",
                 image_dataset_index=None, spectrum_dataset_index=None,
-                digits=4, image_post_processing=None, frames=None):
+                digits=None, image_post_processing=None, frames=None,
+                extension="tiff", multithreading=True, **kwargs):
     """
     Extract images and spectrum data from Velox emd files using TEMMETA.
 
@@ -92,11 +96,19 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
         exported.
     frames: list, optional
         a list of indexes of frames that should be exported if not all.
+    extension: str, optional
+        extension of the exported images
+    multithreading : bool, optional
+        whether to use multithreading to export
+
+    Additional parameters
+    ---------------------
+    See kwargs of processing.write_config method
     """
-    inp, ext = os.path.splitext(input_path)
     if not os.path.isfile(input_path) and ext == "emd":
         raise ValueError("{} is not a valid emd file path".format(input_path))
-
+    input_path = os.path.abspath(input_path)
+    inp, ext = os.path.splitext(input_path)
     if output_folder is None:
         output_folder = os.path.dirname(input_path)
     elif not os.path.isdir(output_folder):
@@ -123,7 +135,9 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
     else:
         raise TypeError("image_dataset_index received unexpected type:"
                         f"{type(image_dataset_index)}")
-
+    image_paths = []
+    output_paths = []
+    config_paths = []
     for j, k in dsets:
         try:
             ima = f.get_dataset("Image", k)
@@ -138,12 +152,36 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
             opath = str(Path(f"{output_folder}/images_{c}/"))
             if not os.path.isdir(opath):
                 os.makedirs(opath)
+            if digits is None:
+                digits = dio._get_counter(ima.frames)
+            else:
+                digits = digits
             export_frames(ima, output_folder=opath,
                           prefix=prefix,
                           digits=digits, frames=frames,
-                          multithreading=True,
-                          data_format="tiff")
+                          multithreading=multithreading,
+                          data_format=extension)
             ima.metadata.to_file(f"{opath}/metadata_images.json")
+            # also create a config file for all datasets
+            # construct the config file
+            filename = str(Path(output_folder+f"/matchSeries_{c}.par"))
+            pathpattern = str(Path(
+              output_folder+f"/images_{c}/{prefix}_%0{digits}d.{extension}"))
+            abspath = str(Path(output_folder))
+            # already create the folder for the output
+            outputpath = str(Path(f"{abspath}/nonrigid_results_{c}/"))
+            outlevel = int(np.log2(ima.width))
+            if not os.path.isdir(outputpath):
+                os.makedirs(outputpath)
+            write_config_file(filename, pathpattern=pathpattern,
+                              savedir=outputpath,
+                              preclevel=outlevel, num_frames=ima.frames,
+                              **kwargs)
+            print(f"Dataset {k} was exported to {opath}. A config file "
+                  f"{filename} was created.")
+            image_paths.append(opath)
+            output_paths.append(outputpath)
+            config_paths.append(filename)
         except Exception as e:
             logging.warning(f"Dataset {k} was not exported: {e}")
     # Spectrumstreams
@@ -152,7 +190,11 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
         f["Data/SpectrumStream"]
     except Exception:
         logging.debug("There is no spectral data in this dataset")
-        return
+        return {"image_folder_paths": image_paths,
+                "output_folder_paths": output_paths,
+                "spectrum_folder_paths": None,
+                "config_file_paths": config_paths}
+    spectrum_paths = []
     # if no dataset is given we extract all of them
     if spectrum_dataset_index is None:
         ssets = enumerate(f["Data/SpectrumStream"].keys())
@@ -175,3 +217,228 @@ def extract_emd(input_path, output_folder=None, prefix="frame",
             logging.debug(f"Wrote the spectral frames out to files in {opath}")
         except Exception as e:
             logging.warning(f"Dataset {k} was not exported: {e}")
+        spectrum_paths.append(opath)
+    return {"image_folder_paths": image_paths,
+            "output_folder_paths": output_paths,
+            "spectrum_folder_paths": spectrum_paths,
+            "config_file_paths": config_paths}
+
+
+def write_dict_to_config_file(filename, dic):
+    """Write a dictionary to the match-series config file format"""
+    p = ""
+    for k, v in dic.items():
+        p = p+k+" "+v+"\n"
+    with open(filename, mode="w") as f:
+        f.write(p)
+
+
+def read_config_file(filename):
+    """
+    Returns the contents of a config file in a dict form.
+    Comment lines are as of now not ignored!
+    """
+    with open(filename) as f:
+        txt = f.read()
+    configs = re.findall(r"([a-zA-Z0-9]+) (.+)\n", txt)
+    return dict(configs)
+
+
+def write_config_file(filename, pathpattern=" ", savedir=" ",
+                      preclevel=8, num_frames=1, numoffset=0,
+                      numstep=1, skipframes=[], presmooth=False,
+                      saverefandtempl=False, numstag=2, normalize=True,
+                      enhancefraction=0.15, mintozero=True, regularization=200,
+                      regfactor=1, gditer=500, epsilon=1e-6,
+                      startleveloffset=2,
+                      extralambda=0.1):
+    """
+    Wrapper function to create a standard config file
+
+    Parameters
+    ----------
+    filename : str
+        path to the config file
+    pathpattern : str, optional
+        string pattern for image files
+    savedir : str, optional
+        path to output folder
+    preclevel : int, optional
+        base2 power of the images
+    num_frames : int, optional
+        number of images to process
+    numoffset : int, optional
+        index of first image to process
+    numstep : int, optional
+        to skip frames at regular interval
+    skipframes : list, optional
+        to kick out certain frames
+    presmooth : bool, optional
+        to smooth images before usage
+    saverefandtempl : bool, optional
+        save both the reference and the template
+    numstage : int, optional
+        number of stages
+    normalize : bool, optional
+        normalize the images
+    enhancefraction : float, optional
+        brightness/contrast adjustment
+    mintozero : bool, optional
+        minimum intensity mapped to 0
+    regularization : int, optional
+        regularization factor used in optimization level 1
+    regfactor : float, optional
+        adjustment of reg parameter with different binnings
+    gditer : int, optional
+        max number of iterations
+    epsilon : float, optional
+        desired precision
+    startleveloffset : int, optional
+        offset of the start level
+    extralambda : int, optional
+        adjustment of regularization with subsequent steps
+    """
+    if normalize:
+        normalize = 0
+    else:
+        normalize = 1
+    skipframes = " ".join(map(str, skipframes))
+    cnfgtmpl = (f"templateNamePattern {pathpattern}\n"
+                f"templateNumOffset {numoffset}\n"
+                f"templateNumStep {numstep}\n"
+                f"numTemplates {num_frames}\n"
+                f"templateSkipNums {{ {skipframes} }}\n"
+                "\n"
+                f"preSmoothSigma {presmooth*1}\n"
+                "\n"
+                f"saveRefAndTempl {saverefandtempl*1}\n"
+                "\n"
+                f"numExtraStages {numstag}\n"
+                "\n"
+                f"saveDirectory {savedir}\n"
+                "\n"
+                f"dontNormalizeInputImages {normalize*1}\n"
+                f"enhanceContrastSaturationPercentage {enhancefraction}\n"
+                f"normalizeMinToZero {mintozero*1}\n"
+                "\n"
+                f"lambda {regularization}\n"
+                f"lambdaFactor {regfactor}\n"
+                "\n"
+                f"maxGDIterations {gditer}\n"
+                f"stopEpsilon {epsilon}\n"
+                "\n"
+                f"startLevel {preclevel-startleveloffset}\n"
+                f"stopLevel {preclevel}\n"
+                f"precisionLevel {preclevel}\n"
+                f"refineStartLevel {preclevel-1}\n"
+                f"refineStopLevel {preclevel}\n"
+                "\n"
+                f"checkboxWidth {preclevel}\n"
+                "\n"
+                f"resizeInput 0\n"
+                "\n"
+                f"dontAccumulateDeformation 0\n"
+                f"reuseStage1Results 1\n"
+                f"extraStagesLambdaFactor {extralambda}\n"
+                f"useMedianAsNewTarget 1\n"
+                f"calcInverseDeformation 0\n"
+                f"skipStage1 0\n"
+                "\n"
+                f"saveNamedDeformedTemplates 1\n"
+                f"saveNamedDeformedTemplatesUsing"
+                f"NearestNeighborInterpolation 1\n"
+                f"saveNamedDeformedTemplatesExtendedWithMean 1\n"
+                f"saveDeformedTemplates 1\n"
+                f"saveNamedDeformedDMXTemplatesAsDMX 1")
+    with open(filename, "w") as file:
+        file.write(cnfgtmpl)
+
+    logging.debug("Wrote the config file with an initial parameter guess")
+
+
+def loadFromQ2bz(path):
+    """
+    Opens a bz2 or q2bz file and returns an "image" = the deformations
+    """
+    filename, file_extension = os.path.splitext(path)
+    # bz2 compresses only a single file
+    if(file_extension == '.q2bz' or file_extension == '.bz2'):
+        # read binary mode, r+b would be to also write
+        fid = bz2.open(path, 'rb')
+    else:
+        fid = open(path, 'rb')  # read binary mode, r+b would be to also write
+    # Read magic number - only possible when bz2.open is called! Will not see
+    # it in hex fiend!
+    # rstrip removes trailing zeros
+    binaryline = fid.readline()  # will look like "b"P9\n""
+    line = binaryline.rstrip().decode('ascii')  # this will look like "P9"
+    if(line[0] != 'P'):
+        raise ValueError("Invalid array header, doesn't start with 'P'")
+    if(line[1] == '9'):
+        dtype = np.float64
+    elif(line[1] == '8'):
+        dtype = np.float32
+    else:
+        dtype = None
+
+    if not dtype:
+        raise NotImplementedError(
+            f"Invalid data type ({line[1]}), only float and "
+            "double are supported currently")
+    # Skip header = b'# This is a QuOcMesh file of type 9 (=RAW DOUBLE)
+    # written 17:36 on Friday, 07 February 2020'
+    _ = fid.readline().rstrip()
+
+    # Read width and height
+    arr = fid.readline().rstrip().split()
+    width = int(arr[0])
+    height = int(arr[1])
+
+    # Read max, but be careful not to read more than one new line after max.
+    # The binary data could start with a value that is equivalent to a
+    # new line.
+    max = ""
+    while True:
+        c = fid.read(1)
+        if c == b'\n':
+            break
+        max = max + str(int(c))
+
+    max = int(max)
+
+    # Read image to vector
+    x = np.frombuffer(fid.read(), dtype)
+    img = x.reshape(height, width)
+    return img
+
+
+def _getNameCounterFrames(path):
+    """
+    Extract relevant information from the config file for processing
+
+    Parameters
+    ----------
+    path : str
+        path to the .par config file
+
+    Returns:
+    tuple of (base name, number of counter digits, extension, number of frames,
+              skipped frames, stoplevel, number of stages)
+    """
+    with open(path) as f:
+        text = f.read()
+
+    basename, counter, ext = re.findall(
+        r"[\/\\]([^\/\\]+)_%0(.+)d\.([A-Za-z0-9]+)", text)[0]
+    counter = int(counter)
+    numframes = int(re.findall(r"numTemplates ([0-9]+)", text)[0])
+    try:
+        skipframes_line = re.findall(r"[^\# *]templateSkipNums (.*)", text)[0]
+        skipframes = re.findall(r"([0-9]+)[^0-9]", skipframes_line)
+        skipframes = list(map(int, skipframes))
+    except Exception:  # when commented out, will give error
+        skipframes = []
+    bznumber = re.findall(r"stopLevel +([0-9]+)", text)[0].zfill(2)
+    stages = int(re.findall(r"numExtraStages +([0-9]+)", text)[0])+1
+
+    return (basename, counter, ext, numframes, skipframes, bznumber, stages)
