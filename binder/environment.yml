@@ -3,5 +3,6 @@ channels:
     - conda-forge
 dependencies:
     - match-series
+    - pip
     - pip:
         - temmeta
