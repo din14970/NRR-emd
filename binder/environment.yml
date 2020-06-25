@@ -1,8 +1,6 @@
 name: nrr
 channels:
-    - conda-forge
+- conda-forge
 dependencies:
-    - match-series
-    - pip
-    - pip:
-        - temmeta
+- match-series=1.0.0=h74958bb_2
+- temmeta
