@@ -1,3 +1,5 @@
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/din14970/NRR-emd/master)
+
 # How to perform non-rigid registration on STEM-EDX datasets with the velox emd file format
 
 ## Download and compile the non-rigid registration software
