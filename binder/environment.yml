@@ -1,0 +1,7 @@
+name: nrr
+channels:
+    - conda-forge
+dependencies:
+    - match-series
+    - pip:
+        - temmeta
