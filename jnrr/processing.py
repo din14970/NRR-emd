@@ -91,23 +91,23 @@ def apply_deformations(result_folder, image_folder=None,
         image = images.data[i]
         logging.info(f"Processing frame {i}: {imname}")
         if firstframe:
-            defX = loadFromQ2bz(f"{result_folder}/stage{stage}/{i}/"
-                                f"deformation_{bznumber}_0.dat.bz2")
-            defY = loadFromQ2bz(f"{result_folder}/stage{stage}/{i}/"
-                                f"deformation_{bznumber}_1.dat.bz2")
+            defX = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}/"
+                                f"deformation_{bznumber}_0.dat.bz2"))
+            defY = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}/"
+                                f"deformation_{bznumber}_1.dat.bz2"))
             firstframe = False
         else:
-            defX = loadFromQ2bz(f"{result_folder}/stage{stage}/{i}_r/"
-                                f"deformation_{bznumber}_0.dat.bz2")
-            defY = loadFromQ2bz(f"{result_folder}/stage{stage}/{i}_r/"
-                                f"deformation_{bznumber}_1.dat.bz2")
+            defX = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}_r/"
+                                f"deformation_{bznumber}_0.dat.bz2"))
+            defY = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}_r/"
+                                f"deformation_{bznumber}_1.dat.bz2"))
         h, w = image.shape
         coords = \
             np.mgrid[0:h, 0:w] + np.multiply([defY, defX], (np.max([h, w])-1))
         deformedImage = ndimage.map_coordinates(image, coords, order=0,
                                                 mode='constant',
                                                 cval=image.mean())
-        defimpath = f"{defImagesFolder}/{dataBaseName}_{c}.{imgext}"
+        defimpath = str(Path(f"{defImagesFolder}/{dataBaseName}_{c}.{imgext}"))
         write_as_image(deformedImage, defimpath)
         logging.info(f"Wrote out the deformed image to {defimpath}")
         if spec_list:
@@ -126,17 +126,18 @@ def apply_deformations(result_folder, image_folder=None,
                         inplace=False, parallel=True)
             result.unfold()
             defspec_sp = csr_matrix(result.data.T)  # sparse matrix rep
-            save_npz(f"{defSpectraFolder}/{dataBaseName}_{c}.npz", defspec_sp)
+            save_npz(str(Path(
+                f"{defSpectraFolder}/{dataBaseName}_{c}.npz")), defspec_sp)
             logging.info("Wrote out the deformed spectrum")
     # also do the post processing, with temmeta it's a minor thing
-    resultFolder = parfolder+f"/results_{numbering}/"
+    resultFolder = str(Path(parfolder+f"/results_{numbering}/"))
     if not os.path.isdir(resultFolder):
         os.makedirs(resultFolder)
     # average image
     averageUndeformed = images.average()
-    averageUndeformed.to_hspy(resultFolder+"/imageUndeformed.hspy")
+    averageUndeformed.to_hspy(str(Path(resultFolder+"/imageUndeformed.hspy")))
     write_as_image(averageUndeformed.data,
-                   resultFolder+f"/imageUndeformed.{imgext}")
+                   str(Path(resultFolder+f"/imageUndeformed.{imgext}")))
     # average image from deformed
     averageDeformed = dio.import_files_to_stack(defImagesFolder)
     averageDeformed._create_child_stack(
@@ -146,13 +147,14 @@ def apply_deformations(result_folder, image_folder=None,
          f"config file {config_file}")
     )
     averageDeformed = averageDeformed.average()
-    averageDeformed.to_hspy(resultFolder+"/imageDeformed.hspy")
+    averageDeformed.to_hspy(str(Path(resultFolder+"/imageDeformed.hspy")))
     write_as_image(averageDeformed.data,
-                   resultFolder+f"/imageDeformed.{imgext}")
+                   str(Path(resultFolder+f"/imageDeformed.{imgext}")))
     if spectra_folder is not None:
         # averaged spectrum
         spectrumUndeformed = specstr.spectrum_map
-        spectrumUndeformed.to_hspy(resultFolder+"/spectrumUndeformed.hspy")
+        spectrumUndeformed.to_hspy(str(Path(
+            resultFolder+"/spectrumUndeformed.hspy")))
         # averaged spectrum deformed
         spectrumDeformed = dio.import_files_to_spectrumstream(defSpectraFolder)
         spectrumDeformed = spectrumDeformed.spectrum_map
