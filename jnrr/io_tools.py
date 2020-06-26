@@ -239,10 +239,10 @@ def read_config_file(filename):
     Returns the contents of a config file in a dict form.
     Comment lines are as of now not ignored!
     """
-    with open(filename) as f:
-        txt = f.read()
-    configs = re.findall(r"([a-zA-Z0-9]+) (.+)\n", txt)
-    return dict(configs)
+    reg = r"^([^# ]*[a-zA-Z0-9]+) *(.+)$"
+    dic = [re.findall(reg, line)[0] for line in open(filename)
+           if re.findall(reg, line)]
+    return dict(dic)
 
 
 def write_config_file(filename, pathpattern=" ", savedir=" ",
@@ -353,7 +353,6 @@ def write_config_file(filename, pathpattern=" ", savedir=" ",
                 f"saveNamedDeformedDMXTemplatesAsDMX 1")
     with open(filename, "w") as file:
         file.write(cnfgtmpl)
-
     logging.debug("Wrote the config file with an initial parameter guess")
 
 
@@ -389,12 +388,10 @@ def loadFromQ2bz(path):
     # Skip header = b'# This is a QuOcMesh file of type 9 (=RAW DOUBLE)
     # written 17:36 on Friday, 07 February 2020'
     _ = fid.readline().rstrip()
-
     # Read width and height
     arr = fid.readline().rstrip().split()
     width = int(arr[0])
     height = int(arr[1])
-
     # Read max, but be careful not to read more than one new line after max.
     # The binary data could start with a value that is equivalent to a
     # new line.
@@ -406,7 +403,6 @@ def loadFromQ2bz(path):
         max = max + str(int(c))
 
     max = int(max)
-
     # Read image to vector
     x = np.frombuffer(fid.read(), dtype)
     img = x.reshape(height, width)
@@ -441,5 +437,4 @@ def _getNameCounterFrames(path):
         skipframes = []
     bznumber = re.findall(r"stopLevel +([0-9]+)", text)[0].zfill(2)
     stages = int(re.findall(r"numExtraStages +([0-9]+)", text)[0])+1
-
     return (basename, counter, ext, numframes, skipframes, bznumber, stages)

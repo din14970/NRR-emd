@@ -2,3 +2,6 @@
 .vscode
 .ipynb_checkpoints/
 **/__pycache__/**
+data/images**
+data/spectra**
+data/matchSeries**
