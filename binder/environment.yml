@@ -2,5 +2,6 @@ name: nrr
 channels:
 - conda-forge
 dependencies:
-- match-series=1.0.0=h74958bb_2
+- scikit-image==0.16.2
 - temmeta
+- match-series
