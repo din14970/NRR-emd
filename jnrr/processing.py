@@ -92,15 +92,15 @@ def apply_deformations(result_folder, image_folder=None,
         logging.info(f"Processing frame {i}: {imname}")
         if firstframe:
             defX = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}/"
-                                f"deformation_{bznumber}_0.dat.bz2"))
+                                f"deformation_{bznumber}_0.dat.bz2")))
             defY = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}/"
-                                f"deformation_{bznumber}_1.dat.bz2"))
+                                f"deformation_{bznumber}_1.dat.bz2")))
             firstframe = False
         else:
-            defX = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}_r/"
-                                f"deformation_{bznumber}_0.dat.bz2"))
-            defY = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}_r/"
-                                f"deformation_{bznumber}_1.dat.bz2"))
+            defX = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}-r/"
+                                f"deformation_{bznumber}_0.dat.bz2")))
+            defY = loadFromQ2bz(str(Path(f"{result_folder}/stage{stage}/{i}-r/"
+                                f"deformation_{bznumber}_1.dat.bz2")))
         h, w = image.shape
         coords = \
             np.mgrid[0:h, 0:w] + np.multiply([defY, defX], (np.max([h, w])-1))
@@ -142,7 +142,7 @@ def apply_deformations(result_folder, image_folder=None,
     averageDeformed = dio.import_files_to_stack(defImagesFolder)
     averageDeformed._create_child_stack(
         True, averageDeformed.data, averageDeformed.pixelsize,
-        averageDeformed.pixeluint, averageDeformed,
+        averageDeformed.pixelunit, averageDeformed,
         ("Performed non-rigid registration alignment with "
          f"config file {config_file}")
     )

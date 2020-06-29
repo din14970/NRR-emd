@@ -5,3 +5,6 @@
 data/images**
 data/spectra**
 data/matchSeries**
+data/deformed**
+data/nonrigid**
+data/results**
