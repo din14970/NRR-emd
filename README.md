@@ -45,6 +45,8 @@ Open the example by starting jupyter notebook
 $ jupyter notebook
 ```
 
+Download the datafile in the jupyter notebook from <https://owncloud.gwdg.de/index.php/s/UFx7wmbbwEiVbB7/download> and put it into the `data` subdirectory. Make sure it has the name `sample_data.emd`.
+
 At the moment there is no easy conda or pip install for this tool as it may be
 integrated into some other tool at some point.
 

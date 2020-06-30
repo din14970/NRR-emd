@@ -1,4 +1,4 @@
 #!/bin/bash
 cd data/
-wget https://owncloud.gwdg.de/index.php/s/UFx7wmbbwEiVbB7/download
+wget -O sample_data.emd https://owncloud.gwdg.de/index.php/s/UFx7wmbbwEiVbB7/download
 
