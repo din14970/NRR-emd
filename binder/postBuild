@@ -1,0 +1,4 @@
+#!/bin/bash
+cd data/
+wget https://owncloud.gwdg.de/index.php/s/UFx7wmbbwEiVbB7/download
+
