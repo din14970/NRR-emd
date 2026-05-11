@@ -1,3 +1,5 @@
+> This project is superseded by [PyMatchSeries](https://codeberg.org/din14970/pyMatchSeries)
+
 # Non-rigid-registration on Velox-EMD datasets
 ## About
 This repo is a collection of scripts, modules and examples with which the
